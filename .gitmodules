@@ -1,0 +1,3 @@
+[submodule "src/Distill-Any-Depth"]
+	path = src/Distill-Any-Depth
+	url = https://huggingface.co/spaces/xingyang1/Distill-Any-Depth
