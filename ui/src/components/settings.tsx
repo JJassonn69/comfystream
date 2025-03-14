@@ -3,6 +3,7 @@
  */
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { workflowToAPI, WorkflowJSON, APIWorkflow } from "@/utils/workflow-converter";
 import {
   Dialog,
   DialogContent,
@@ -273,16 +274,51 @@ function ConfigForm({ config, onSubmit }: ConfigFormProps) {
       const files = Array.from(e.target.files);
       const fileReads = files.map(async (file) => {
         const text = await file.text();
-        return JSON.parse(text);
+        const parsedWorkflow = JSON.parse(text);
+        
+        // Type guard to validate workflow structure
+        const isWorkflowJSON = (data: any): data is WorkflowJSON => {
+          return (
+            data &&
+            typeof data === 'object' &&
+            Array.isArray(data.nodes) &&
+            Array.isArray(data.links) &&
+            typeof data.last_node_id === 'number'
+          );
+        };
+        
+        // Check if this is a UI workflow format
+        if (isWorkflowJSON(parsedWorkflow)) {
+          try {
+            // Convert UI workflow to API format
+            const convertedWorkflow: APIWorkflow = workflowToAPI(parsedWorkflow);
+            return convertedWorkflow;
+          } catch (convErr) {
+            console.error("Failed to convert workflow format:", convErr);
+            toast.error("Failed to Convert Workflow", {
+              description: "Error converting workflow to API format.",
+            });
+            return parsedWorkflow; // Fall back to original format
+          }
+        }
+        // If not in UI format, verify it's in API format
+        if (typeof parsedWorkflow === 'object' && parsedWorkflow !== null && 'prompt' in parsedWorkflow) {
+          return parsedWorkflow; // Already in API format
+        }
+        throw new Error('Invalid workflow format: must be either UI or API format');
       });
 
       const allPrompts = await Promise.all(fileReads);
       setPrompts(allPrompts);
       setOriginalPrompts(allPrompts);
+      
+      toast.success("Workflow Loaded", {
+        description: "Successfully processed the workflow file.",
+      });
     } catch (err) {
       console.error("Failed to parse one or more JSON files.", err);
       toast.error("Failed to Parse Workflow", {
-        description: "Please upload a valid JSON file.",
+        description: err instanceof Error ? err.message : "Please upload a valid ComfyUI workflow file in either UI or API format.",
       });
     }
   };
